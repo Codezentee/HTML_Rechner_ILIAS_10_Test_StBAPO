@@ -1,0 +1,3 @@
+Dieser Rechner ist mit der ILIAS v10.11 2026-09-03 abgestimmt. Er fasst die Exporte aus ILIAS Tests zusammen und bietet eine Notenberechnung nach § 18 StBAPO an. Ergebnisse können sowohl für den gesamten Termin als auch für einzelne Testgruppen ausgegeben werden.
+Bei dieser ILIAS-Version sind die Excel-Exportdateien wie folgt strukturiert: 1. Blatt: Aggregierte Testergebnisse; 2. Blatt ,,Testergebnisse''. Daran schließen sich einzelne Blätter je Prüfling an. Das Tool benötigt nur die ersten beiden Tabellenblätter.
+Das Tool arbeitet offline. Es importiert beim Start nur zwei Bibliotheken aus dem Internet. Es werden keinerlei Daten in das Internet übertragen (=DSGVO-konform). Das Tool ist mithilfe von KI erstellt. Es halluziniert selbst nicht.
