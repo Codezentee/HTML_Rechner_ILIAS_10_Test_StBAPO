@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ILIAS-Testauswertung & Notenrechner § 18 StBAPO (kombiniert)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        :root {
+            --primary: #2461c4;
+            --primary-dark: #1a4694;
+            --primary-light: #e4edfc;
+            --secondary: #c2660c;
+            --secondary-dark: #9c530a;
+            --secondary-light: #fbe8d4;
+            --surface: #ffffff;
+            --bg: #eef1f5;
+            --border: #dde3ea;
+            --text: #26313d;
+            --text-muted: #66707c;
+            --accent-green: #1f8a5f;
+            --warn-bg: #fff6dd;
+            --warn-border: #f0c650;
+            --error: #c0392b;
+            --radius: 10px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 24px;
+            background-color: var(--bg);
+            color: var(--text);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: transparent;
+            padding: 0;
+        }
+        h1 { color: var(--text); text-align: center; margin-bottom: 6px; font-size: 1.7em; }
+        .subtitle { text-align: center; margin-bottom: 24px; }
+        h2 { color: var(--text); margin: 0; font-size: 1.2em; }
+
+        /* Einheitliche "Schritt"-Karten für alle drei Bereiche */
+        .step-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 22px 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(20,30,40,0.06);
+        }
+        .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .step-badge {
+            flex: 0 0 auto;
+            width: 30px; height: 30px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            font-weight: bold;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.95em;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--primary);
+            border-radius: var(--radius);
+            padding: 30px;
+            text-align: center;
+            background: var(--primary-light);
+            margin: 15px 0;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .drop-zone.highlight { border-color: var(--accent-green); background: #e6f6ee; }
+        .drop-zone p { margin: 10px 0; color: var(--text-muted); }
+        .file-list { margin-top: 10px; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; max-height: 200px; overflow-y: auto; }
+        .file-item { padding: 6px 2px; border-bottom: 1px solid var(--border); font-size: 0.95em; }
+        .file-item:last-child { border-bottom: none; }
+
+        /* Scrollbarer Tabellen-Container */
+        .table-scroll {
+            margin-top: 15px;
+            max-height: 520px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; white-space: nowrap; }
+        th { background-color: var(--primary); color: white; position: sticky; top: 0; z-index: 2; }
+        tbody tr:nth-child(even) td { background-color: #f7f9fc !important; }
+        tr.warn td { background-color: var(--warn-bg) !important; }
+        tr.group-row td { background-color: var(--primary-light) !important; font-weight: bold; }
+        tr.section-row td { background-color: #d7e3fa !important; font-weight: bold; }
+        .table-scroll table th:first-child, .table-scroll table td:first-child {
+            position: sticky; left: 0; z-index: 1; background-color: #ffffff;
+        }
+        .table-scroll table th:first-child { background-color: var(--primary); z-index: 3; }
+        .warn-flag { color: var(--error); font-weight: bold; cursor: help; }
+
+        .btn { background-color: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 15px; margin: 10px 8px 0 0; transition: background-color 0.2s; }
+        .btn:hover { background-color: var(--primary-dark); }
+        .btn:disabled { background-color: #b7c3d1; cursor: not-allowed; }
+        .btn-secondary { background-color: var(--secondary); }
+        .btn-secondary:hover { background-color: var(--secondary-dark); }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; color: var(--text); }
+        input[type="number"], input[type="text"], input[type="file"] { width: 100%; padding: 9px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: 0.95em; }
+
+        .summary { background: var(--primary-light); padding: 15px; border-radius: 8px; margin: 15px 0 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+        .summary-item { margin: 0; padding: 10px 12px; background: white; border-radius: 6px; border: 1px solid var(--border); }
+        .highlight { font-weight: bold; color: var(--primary-dark); }
+        .error { color: var(--error); background: #fdecea; border: 1px solid #f5c6c0; padding: 10px 14px; border-radius: 8px; margin: 0 0 20px 0; }
+        .hidden { display: none; }
+        .max-points-input { margin: 15px 0; padding: 15px; background: var(--warn-bg); border-radius: 8px; border: 1px solid var(--warn-border); }
+        .hint { color: var(--text-muted); font-size: 0.9em; }
+        .signal-banner {
+            color: var(--secondary-dark);
+            background: var(--secondary-light);
+            border-left: 4px solid var(--secondary);
+            border-radius: 4px;
+            font-weight: 700;
+            padding: 10px 14px;
+            margin: 6px 0 16px 0;
+        }
+
+        /* Tabs: an die Kopfzeilenfarbe der Tabellen angeglichen, klar voneinander abgesetzt */
+        .tab { display: flex; gap: 6px; border-bottom: 2px solid var(--primary); margin-bottom: 0; }
+        .tab button {
+            background-color: var(--primary-light);
+            color: var(--primary-dark);
+            border: 1px solid var(--border);
+            border-bottom: none;
+            outline: none;
+            cursor: pointer;
+            padding: 12px 18px;
+            transition: 0.2s;
+            font-weight: 600;
+            font-size: 0.95em;
+            border-radius: 8px 8px 0 0;
+            position: relative;
+            top: 2px;
+        }
+        .tab button:hover { background-color: #cfe0fa; }
+        .tab button.active { background-color: var(--primary); color: white; border-color: var(--primary); }
+        .tabcontent { display: none; padding: 18px 4px 4px 4px; }
+        .export-section p.hint { margin-top: 14px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>ILIAS-Testauswertung &amp; Notenrechner § 18 StBAPO</h1>
+    <p class="subtitle hint">Kombiniertes Tool aus „Auswertung der ILIAS Test Fragen" (V13) und „Notenrechner § 18 StBAPO" (Vers.4). Bei mehreren Berechnungen hintereinander vorher mit „Zurücksetzen" neu starten.</p>
+
+    <div class="step-card">
+        <div class="step-header"><span class="step-badge">1</span><h2>Dateien hochladen</h2></div>
+        <p>Ziehen Sie die aus ILIAS exportierten Excel-Dateien (mit den Blättern <strong>„Aggregierte Testergebnisse"</strong> und <strong>„Testergebnisse"</strong>) hierher oder klicken Sie zum Hochladen. Aus jedem Dateinamen wird automatisch das Ordnungskriterium (Studiengruppe) ermittelt: Datei ohne Nummerierung → Gruppe 1, <code>...(1).xlsx</code> → Gruppe 2, <code>...(2).xlsx</code> → Gruppe 3 usw.</p>
+
+        <div class="drop-zone" id="drop-area">
+            <p><strong>Excel-Dateien hier ablegen oder klicken zum Auswählen</strong></p>
+            <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="display: none;">
+        </div>
+        <div id="file-list" class="file-list hidden"></div>
+    </div>
+
+    <div class="step-card">
+        <div class="step-header"><span class="step-badge">2</span><h2>Daten verarbeiten</h2></div>
+
+        <div class="max-points-input hidden" id="maxPointsInputSection">
+            <div class="form-group">
+                <label for="maxPoints">Bitte geben Sie die maximal erreichbare Leistungspunktzahl ein (für die Notenberechnung nach § 18 StBAPO):</label>
+                <input type="number" id="maxPoints" min="1" step="1" required>
+            </div>
+            <button class="btn" onclick="retryWithMaxPoints()">Weiter mit dieser Punktzahl</button>
+        </div>
+
+        <button class="btn" id="process-btn" disabled onclick="processAllData()">Daten verarbeiten</button>
+        <button class="btn btn-secondary" onclick="resetAll()">Zurücksetzen</button>
+
+        <div id="errorSection" class="error hidden"></div>
+
+        <div id="results" class="hidden">
+            <div class="tab">
+                <button type="button" class="tablinks" onclick="openTab(event, 'notenberechnung')" id="defaultOpen">Notenberechnung (§ 18 StBAPO)</button>
+                <button type="button" class="tablinks" onclick="openTab(event, 'zusammenfassung')">Statistik</button>
+                <button type="button" class="tablinks" onclick="openTab(event, 'fragenauswertung')">Fragenauswertung</button>
+            </div>
+
+            <div id="zusammenfassung" class="tabcontent">
+                <p class="hint">Kennzahlen aus dem oberen Block von „Aggregierte Testergebnisse", zusammengefasst über alle eingelesenen Dateien. Die vollständige Aufschlüsselung je Datei steht in der Gesamtdatei (Blatt „Statistik") zur Verfügung.</p>
+                <p class="signal-banner">Gesamt (alle eingelesenen Dateien) – Importierte Angaben VOR der Berechnung nach der StBAPO!</p>
+                <div id="zusammenfassung-table"></div>
+            </div>
+
+            <div id="fragenauswertung" class="tabcontent">
+                <div id="fragenauswertung-content"></div>
+            </div>
+
+            <div id="notenberechnung" class="tabcontent">
+                <div id="calculationsSection" class="summary hidden">
+                    <div class="summary-item"><strong>Anzahl der eingelesenen Dateien:</strong> <span id="fileCount" class="highlight"></span></div>
+                    <div class="summary-item"><strong>Anzahl der Studenten:</strong> <span id="studentCount" class="highlight"></span></div>
+                    <div class="summary-item"><strong>Maximal erreichbare Punktezahl:</strong> <span id="maxPointsDisplay" class="highlight"></span></div>
+                    <div class="summary-item"><strong>Durchschnittliche Leistung:</strong> <span id="avgPerformance" class="highlight"></span></div>
+                    <div class="summary-item"><strong>60%-Grenze:</strong> <span id="sixtyPercentThreshold" class="highlight"></span></div>
+                    <div class="summary-item"><strong>Relative Grenze (78% des Durchschnitts):</strong> <span id="relativeThreshold" class="highlight"></span></div>
+                    <div class="summary-item"><strong>Ankergrenze (50% der Maximalpunkte):</strong> <span id="anchorThreshold" class="highlight"></span></div>
+                    <div class="summary-item"><strong>Geltende Mindestleistungspunktzahl:</strong> <span id="finalThreshold" class="highlight"></span></div>
+                    <div class="summary-item"><strong>Differenz (Maximalpunkte - MLP):</strong> <span id="diffMLPMax" class="highlight"></span></div>
+                </div>
+                <p class="hint">Die vollständige Notenberechnung (je Studierendem) sowie Bestehensgrenzen, Notenstufen und Auswertung werden in der Gesamtdatei exportiert.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="exportSection" class="step-card hidden">
+        <div class="step-header"><span class="step-badge">3</span><h2>Export</h2></div>
+        <div class="form-group">
+            <label for="exportPrefix">Präfix für den Dateinamen der Exportdatei(en) (wird automatisch aus dem ersten Dateinamen vorgeschlagen, kann aber angepasst werden):</label>
+            <input type="text" id="exportPrefix">
+        </div>
+        <button class="btn" onclick="exportCombined()">Gesamtdatei exportieren (alle Tabellenblätter)</button>
+        <button class="btn btn-secondary" onclick="exportPerStudyGroup()">Gruppendateien exportieren (Notenberechnung je Studiengruppe)</button>
+        <p class="hint">Die Gesamtdatei enthält alle Tabellenblätter beider Auswertungen (Testergebnisse, Bestehensgrenzen, Notenberechnung, Notenstufen, Auswertung, Statistik, Fragenauswertung, Einzelergebnisse) in einer Excel-Datei. Der Gruppendateien-Export erzeugt unverändert je Studiengruppe (Ordnungskriterium) eine eigene Datei mit dem Blatt „Notenberechnung" – Ihr Browser fragt dabei ggf. nach, ob mehrere Downloads erlaubt werden sollen.</p>
+    </div>
+</div>
+
+<script>
+    // ======================================================================
+    // Gemeinsamer Zustand
+    // ======================================================================
+    let files = [];               // hochgeladene File-Objekte (gemeinsamer Upload)
+
+    // ---- Zustand "Auswertung der ILIAS Test Fragen" (vormals Tool A) ----
+    let parsedFilesA = [];        // [{ name, groupSortKey, groupLabel, overview, questions, participants }]
+    let sortedFilesA = [];        // parsedFilesA sortiert nach groupSortKey aufsteigend
+    let aggregatedQuestions = []; // Ergebnis von aggregateQuestions(sortedFilesA)
+    let overallStats = [];        // Ergebnis von computeOverallStats(sortedFilesA)
+
+    // ---- Zustand "Notenrechner § 18 StBAPO" (vormals Tool B) ----
+    let allStudentData = [];      // [{ studyGroup, originalRow, points, grade }]
+    let maxPoints = 0;
+    let calculations = {};
+    let fileCount = 0;
+    let allHeaders = [];
+    let maxPointsAutoDetected = false;
+
+    // ======================================================================
+    // Gemeinsames Ordnungskriterium (Studiengruppe) aus dem Dateinamen
+    // Kein "(n)" am Ende -> Gruppe 1 / Ordnungskriterium 1. "(1)" -> Gruppe 2 / 2. usw.
+    // ======================================================================
+    function getGroupInfo(fileName) {
+        const m = fileName.match(/\((\d+)\)\.(xlsx|xls|csv)$/i);
+        const n = m ? parseInt(m[1], 10) : 0;
+        return { sortKey: n, number: n + 1, label: 'Gruppe ' + (n + 1) };
+    }
+
+    // ======================================================================
+    // Gemeinsamer Datei-Upload (Drag & Drop / Klick)
+    // ======================================================================
+    const dropArea = document.getElementById('drop-area');
+    const fileInputEl = document.getElementById('file-input');
+    const fileListEl = document.getElementById('file-list');
+    const processBtn = document.getElementById('process-btn');
+    const resultsDiv = document.getElementById('results');
+    const exportSectionEl = document.getElementById('exportSection');
+
+    dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('highlight'); });
+    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('highlight'));
+    dropArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropArea.classList.remove('highlight');
+        if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+    });
+    dropArea.addEventListener('click', () => fileInputEl.click());
+    fileInputEl.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFiles(e.target.files); });
+
+    function handleFiles(newFiles) {
+        files = [...files, ...Array.from(newFiles)];
+        updateFileList();
+        processBtn.disabled = files.length === 0;
+    }
+
+    function updateFileList() {
+        fileListEl.innerHTML = '';
+        if (files.length === 0) { fileListEl.classList.add('hidden'); return; }
+        fileListEl.classList.remove('hidden');
+        files.forEach((file, index) => {
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            const gi = getGroupInfo(file.name);
+            div.textContent = `${index + 1}. ${file.name} (${(file.size / 1024).toFixed(2)} KB) – Ordnungskriterium: ${gi.number}`;
+            fileListEl.appendChild(div);
+        });
+    }
+
+    // ======================================================================
+    // Tabs
+    // ======================================================================
+    function openTab(evt, tabName) {
+        const tabcontent = document.getElementsByClassName('tabcontent');
+        for (let i = 0; i < tabcontent.length; i++) tabcontent[i].style.display = 'none';
+        const tablinks = document.getElementsByClassName('tablinks');
+        for (let i = 0; i < tablinks.length; i++) tablinks[i].className = tablinks[i].className.replace(' active', '');
+        document.getElementById(tabName).style.display = 'block';
+        evt.currentTarget.className += ' active';
+    }
+
+    function showError(message) {
+        const errorSection = document.getElementById('errorSection');
+        errorSection.textContent = message;
+        errorSection.classList.remove('hidden');
+    }
+    function hideError() {
+        document.getElementById('errorSection').classList.add('hidden');
+    }
+
+    // ======================================================================
+    // Hilfsfunktionen für Dateinamen (aus dem Notenrechner übernommen, unverändert)
+    // ======================================================================
+    function guessExportPrefix(filename) {
+        const noExt = filename.replace(/\.(xlsx|xls|csv)$/i, '');
+        const testMatch = noExt.match(/^(.*?)\s+Test\s*\d+\b/i);
+        if (testMatch && testMatch[1].trim()) return testMatch[1].trim();
+        const dashIdx = noExt.indexOf(' - ');
+        if (dashIdx !== -1) return noExt.slice(0, dashIdx).trim();
+        const markers = ['_Bewerteter Durchlauf', '_Ergebnisse', ' Ergebnisse'];
+        for (const marker of markers) {
+            const idx = noExt.toLowerCase().indexOf(marker.toLowerCase());
+            if (idx !== -1 && idx > 0) return noExt.slice(0, idx).trim();
+        }
+        return noExt.replace(/\s*\(\d+\)$/, '').trim();
+    }
+    function sanitizeFilenamePart(str) {
+        return str.replace(/[\\/:*?"<>|]/g, '').trim();
+    }
+
+    // ======================================================================
+    // Blätter im Workbook finden
+    // ======================================================================
+    function findAggregatedSheetName(workbook) {
+        let name = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'aggregierte testergebnisse');
+        if (!name) name = workbook.SheetNames.find(n => n.trim().toLowerCase().includes('aggregiert'));
+        return name;
+    }
+    // Bevorzugt exakte Übereinstimmung "Testergebnisse", sonst ein Blatt mit "testergebnisse" im
+    // Namen, das nicht "aggregiert" enthält, sonst wie bisher jede Teilübereinstimmung.
+    function findTestergebnisseSheetName(workbook) {
+        let name = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'testergebnisse');
+        if (!name) name = workbook.SheetNames.find(n => n.toLowerCase().includes('testergebnisse') && !n.toLowerCase().includes('aggregiert'));
+        if (!name) name = workbook.SheetNames.find(n => n.toLowerCase().includes('testergebnisse'));
+        return name;
+    }
+
+    function readWorkbook(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try { resolve(XLSX.read(e.target.result, { type: 'array' })); }
+                catch (err) { reject(err); }
+            };
+            reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    // ======================================================================
+    // ===== Auswertung der ILIAS Test Fragen (vormals Tool A / V13) =====
+    // ======================================================================
+    const REQUIRED_HEADERS = [
+        { key: 'questionId', label: 'fragen-id' },
+        { key: 'title', label: 'fragentitel' },
+        { key: 'avg', label: 'durchschnittlich erreichte punktezahl' },
+        { key: 'max', label: 'punkte' },
+        { key: 'percent', label: 'prozentsatz' },
+        { key: 'count', label: 'anzahl der antworten' }
+    ];
+
+    function parseAggregatedSheet(data) {
+        let headerRowIndex = -1;
+        for (let i = 0; i < data.length; i++) {
+            const row = data[i] || [];
+            if (row.some(cell => typeof cell === 'string' && cell.trim().toLowerCase() === 'fragentitel')) { headerRowIndex = i; break; }
+        }
+        if (headerRowIndex === -1) throw new Error("Im Blatt 'Aggregierte Testergebnisse' wurde keine Kopfzeile mit 'Fragentitel' gefunden.");
+        const headerRow = data[headerRowIndex] || [];
+
+        const sortedByLabelLength = [...REQUIRED_HEADERS].sort((a, b) => b.label.length - a.label.length);
+        const colIndex = {}; const used = new Set();
+        sortedByLabelLength.forEach(({ key, label }) => {
+            let idx = headerRow.findIndex((c, i) => !used.has(i) && typeof c === 'string' && c.trim().toLowerCase() === label);
+            if (idx === -1) idx = headerRow.findIndex((c, i) => !used.has(i) && typeof c === 'string' && c.trim().toLowerCase().includes(label));
+            if (idx !== -1) { colIndex[key] = idx; used.add(idx); }
+        });
+        if (colIndex.title === undefined) throw new Error("Spalte 'Fragentitel' konnte nicht zugeordnet werden.");
+
+        const overview = [];
+        for (let r = 0; r < headerRowIndex; r++) {
+            const row = data[r] || [];
+            const label = row[0], value = row[1];
+            if (label !== undefined && String(label).trim() !== '' && String(label).trim().toLowerCase() !== 'ergebnis') {
+                overview.push({ label: String(label).trim(), value: value === undefined ? '' : value });
+            }
+        }
+
+        const questions = [];
+        for (let r = headerRowIndex + 1; r < data.length; r++) {
+            const row = data[r];
+            if (!row || row.every(c => c === undefined || c === '')) continue;
+            const rawTitle = row[colIndex.title];
+            if (rawTitle === undefined || String(rawTitle).trim() === '') continue;
+            const avg = colIndex.avg !== undefined ? parseFloat(row[colIndex.avg]) : NaN;
+            const max = colIndex.max !== undefined ? parseFloat(row[colIndex.max]) : NaN;
+            const percent = colIndex.percent !== undefined ? parseFloat(row[colIndex.percent]) : NaN;
+            const count = colIndex.count !== undefined ? parseFloat(row[colIndex.count]) : NaN;
+            questions.push({
+                title: String(rawTitle).trim(),
+                avg: isNaN(avg) ? null : avg, max: isNaN(max) ? null : max,
+                percent: isNaN(percent) ? null : percent, count: isNaN(count) ? null : count
+            });
+        }
+        return { overview, questions };
+    }
+
+    const PARTICIPANT_FIXED_COLUMNS = [
+        'Anmeldename', 'Erster Aufruf', 'Letzter Aufruf', 'Totale Bearbeitungsdauer (Alle Durchgänge)',
+        'Testergebnis in Punkten', 'Maximal erreichbare Punktezahl', 'Gesamtzahl der Fragen',
+        'Bereits bearbeitete Fragen', 'Bearbeitungsdauer', 'Durchschnittliche Bearbeitungsdauer pro Frage',
+        'Gestartete Durchläufe', 'Beendete Durchläufe', 'Bewerteter Durchlauf', 'Durchlauf'
+    ];
+
+    function parseTestergebnisseSheet(data) {
+        if (!data || data.length === 0) return [];
+        const headerRow = data[0] || [];
+        const fixedColIndex = {};
+        PARTICIPANT_FIXED_COLUMNS.forEach(name => {
+            fixedColIndex[name] = headerRow.findIndex(c => typeof c === 'string' && c.trim().toLowerCase() === name.toLowerCase());
+        });
+        const durchlaufIdx = fixedColIndex['Durchlauf'];
+        const questionStartIdx = durchlaufIdx !== -1 ? durchlaufIdx + 1 : headerRow.length;
+        const questionCols = [];
+        for (let i = questionStartIdx; i < headerRow.length; i++) {
+            const title = headerRow[i];
+            if (title !== undefined && String(title).trim() !== '') questionCols.push({ index: i, title: String(title).trim() });
+        }
+        const rows = [];
+        for (let r = 1; r < data.length; r++) {
+            const row = data[r];
+            if (!row || row.every(c => c === undefined || c === '')) continue;
+            const participant = {};
+            PARTICIPANT_FIXED_COLUMNS.forEach(name => {
+                const idx = fixedColIndex[name];
+                participant[name] = idx !== -1 && row[idx] !== undefined ? row[idx] : '';
+            });
+            participant.questions = {};
+            questionCols.forEach(({ index, title }) => { participant.questions[title] = row[index] !== undefined ? row[index] : ''; });
+            rows.push(participant);
+        }
+        return rows;
+    }
+
+    function parseOfPair(value) {
+        if (typeof value !== 'string') return null;
+        const m = value.match(/^(-?\d+(?:[.,]\d+)?)\s*of\s*(-?\d+(?:[.,]\d+)?)$/i);
+        if (!m) return null;
+        return { num: parseFloat(m[1].replace(',', '.')), denom: parseFloat(m[2].replace(',', '.')) };
+    }
+    function formatNumberComma(num, decimals) { if (decimals === undefined) decimals = 2; return num.toFixed(decimals).replace('.', ','); }
+    function parseTimeToSeconds(str) {
+        if (typeof str !== 'string') return null;
+        const m = str.trim().match(/^(\d+):(\d{1,2}):(\d{1,2})$/);
+        if (!m) return null;
+        return parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseInt(m[3], 10);
+    }
+    function formatSecondsToTime(totalSeconds) {
+        const rounded = Math.round(totalSeconds);
+        const h = Math.floor(rounded / 3600), m = Math.floor((rounded % 3600) / 60), s = rounded % 60;
+        const pad = n => String(n).padStart(2, '0');
+        return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+    function formatStatValueForExport(value) {
+        if (typeof value === 'string') { const pair = parseOfPair(value); if (pair) return formatNumberComma(pair.num); return value; }
+        if (typeof value === 'number') { if (Number.isInteger(value)) return value; return formatNumberComma(value); }
+        return value;
+    }
+
+    function aggregateQuestions(filesArr) {
+        const order = []; const map = {};
+        filesArr.forEach(pf => {
+            pf.questions.forEach(q => {
+                if (!map[q.title]) { map[q.title] = { maxValues: new Set(), sumWeighted: 0, sumCount: 0, perFile: [] }; order.push(q.title); }
+                const m = map[q.title];
+                if (q.max !== null) m.maxValues.add(q.max);
+                if (q.avg !== null && q.count !== null) { m.sumWeighted += q.avg * q.count; m.sumCount += q.count; }
+                m.perFile.push({ fileName: pf.name, avg: q.avg, max: q.max, percent: q.percent, count: q.count });
+            });
+        });
+        return order.map(title => {
+            const m = map[title]; const maxArr = Array.from(m.maxValues);
+            const maxConsistent = maxArr.length <= 1; const maxVal = maxArr.length > 0 ? maxArr[0] : null;
+            const combinedAvg = m.sumCount > 0 ? m.sumWeighted / m.sumCount : null;
+            const combinedPercent = (combinedAvg !== null && maxVal) ? (combinedAvg / maxVal) : null;
+            return { title, maxVal, maxConsistent, maxArr, combinedAvg, combinedPercent, totalCount: m.sumCount, perFile: m.perFile };
+        });
+    }
+
+    function computeOverallStats(filesArr) {
+        const sumLabel = (label) => { let sum = 0; filesArr.forEach(pf => { const e = pf.overview.find(o => o.label === label); if (e) { const v = parseFloat(e.value); if (!isNaN(v)) sum += v; } }); return sum; };
+        const avgOfPairOrNumberLabel = (label) => {
+            let total = 0, count = 0;
+            filesArr.forEach(pf => {
+                const e = pf.overview.find(o => o.label === label); if (!e) return;
+                const pair = parseOfPair(e.value); if (pair) { total += pair.num; count++; return; }
+                const v = parseFloat(e.value); if (!isNaN(v)) { total += v; count++; }
+            });
+            return count > 0 ? total / count : null;
+        };
+        const avgTimeLabel = (label) => {
+            let totalSec = 0, count = 0;
+            filesArr.forEach(pf => {
+                const e = pf.overview.find(o => o.label === label); if (!e) return;
+                const sec = parseTimeToSeconds(String(e.value)); if (sec !== null) { totalSec += sec; count++; }
+            });
+            return count > 0 ? totalSec / count : null;
+        };
+        const mittlereDauerAlle = avgTimeLabel('Mittlere Bearbeitungsdauer aller Tests');
+        const avgPunkteBestanden = avgOfPairOrNumberLabel('Durchschnittliche Punktezahl der bestandenen Tests');
+        const mittlereDauerBestanden = avgTimeLabel('Mittlere Bearbeitungsdauer aller bestandenen Tests');
+        return [
+            { label: 'Gesamtzahl der Teilnehmer', value: sumLabel('Gesamtzahl der Teilnehmer') },
+            { label: 'Gesamtzahl der Personen, die den Test gestartet haben', value: sumLabel('Gesamtzahl der Personen, die den Test gestartet haben') },
+            { label: 'Gesamtzahl aller beendeten Tests (Benutzer, die die maximale Anzahl Testdurchläufe absolviert haben.)', value: sumLabel('Gesamtzahl aller beendeten Tests (Benutzer, die die maximale Anzahl Testdurchläufe absolviert haben.)') },
+            { label: 'Mittlere Bearbeitungsdauer aller Tests', value: mittlereDauerAlle !== null ? formatSecondsToTime(mittlereDauerAlle) : '' },
+            { label: 'Gesamtzahl der bestandenen Tests', value: sumLabel('Gesamtzahl der bestandenen Tests') },
+            { label: 'Durchschnittliche Punktezahl der bestandenen Tests', value: avgPunkteBestanden !== null ? formatNumberComma(avgPunkteBestanden) : '' },
+            { label: 'Mittlere Bearbeitungsdauer aller bestandenen Tests', value: mittlereDauerBestanden !== null ? formatSecondsToTime(mittlereDauerBestanden) : '' }
+        ];
+    }
+    function getOverallParticipantTotal(overallStatsArr) {
+        const e = overallStatsArr.find(o => o.label === 'Gesamtzahl der Teilnehmer');
+        return e ? e.value : 0;
+    }
+
+    function renderStatistik(overallStatsArr) {
+        const tableDiv = document.getElementById('zusammenfassung-table');
+        tableDiv.innerHTML = '';
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const headerTr = document.createElement('tr');
+        headerTr.appendChild(document.createElement('th')).textContent = 'Kennzahl';
+        headerTr.appendChild(document.createElement('th')).textContent = 'Wert';
+        thead.appendChild(headerTr);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        overallStatsArr.forEach(stat => {
+            const tr = document.createElement('tr');
+            tr.appendChild(document.createElement('td')).textContent = stat.label;
+            tr.appendChild(document.createElement('td')).textContent = stat.value;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        const scrollWrap = document.createElement('div');
+        scrollWrap.className = 'table-scroll';
+        scrollWrap.appendChild(table);
+        tableDiv.appendChild(scrollWrap);
+    }
+
+    function renderFragenauswertung(aggregated, filesArr, overallStatsArr) {
+        const contentDiv = document.getElementById('fragenauswertung-content');
+        contentDiv.innerHTML = '';
+        const totalParticipants = getOverallParticipantTotal(overallStatsArr);
+
+        const infoP = document.createElement('p');
+        infoP.className = 'hint';
+        infoP.textContent = `Anzahl der eingelesenen Dateien: ${filesArr.length} | Anzahl eindeutiger Fragen: ${aggregated.length} | Anzahl der Testteilnehmer: ${totalParticipants}`;
+        contentDiv.appendChild(infoP);
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const headerTr = document.createElement('tr');
+        ['Frage', 'Durchschnittlich erreichte Punktezahl', 'Max. erreichbare Punkte', 'Prozentsatz', 'Anzahl der Antworten (gesamt)']
+            .forEach(h => headerTr.appendChild(document.createElement('th')).textContent = h);
+        thead.appendChild(headerTr);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        aggregated.forEach(stat => {
+            const tr = document.createElement('tr');
+            if (!stat.maxConsistent) tr.classList.add('warn');
+            tr.appendChild(document.createElement('td')).textContent = stat.title;
+            tr.appendChild(document.createElement('td')).textContent = stat.combinedAvg !== null ? stat.combinedAvg.toFixed(2) : '';
+            const maxTd = document.createElement('td');
+            if (!stat.maxConsistent) {
+                const span = document.createElement('span');
+                span.className = 'warn-flag';
+                span.title = 'Uneinheitliche Werte über die Dateien: ' + stat.maxArr.join(' / ') + '\n' + stat.perFile.map(f => `${f.fileName}: ${f.max}`).join('\n');
+                span.textContent = `${stat.maxVal} ⚠`;
+                maxTd.appendChild(span);
+            } else {
+                maxTd.textContent = stat.maxVal !== null ? stat.maxVal : '';
+            }
+            tr.appendChild(maxTd);
+            tr.appendChild(document.createElement('td')).textContent = stat.combinedPercent !== null ? (stat.combinedPercent * 100).toFixed(1) + ' %' : '';
+            tr.appendChild(document.createElement('td')).textContent = stat.totalCount || '';
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        const scrollWrap = document.createElement('div');
+        scrollWrap.className = 'table-scroll';
+        scrollWrap.appendChild(table);
+        contentDiv.appendChild(scrollWrap);
+
+        if (aggregated.some(s => !s.maxConsistent)) {
+            const warnP = document.createElement('p');
+            warnP.className = 'hint';
+            warnP.innerHTML = '⚠ = Für diese Frage wurden über die eingelesenen Dateien hinweg unterschiedliche "Max. erreichbare Punkte" gefunden (Mauszeiger über das Symbol halten für Details).';
+            contentDiv.appendChild(warnP);
+        }
+    }
+
+    // ---- Builder-Funktionen für die drei Tabellenblätter (Export) ----
+    function buildStatistikSheetData() {
+        const labelOrder = [];
+        sortedFilesA.forEach(pf => pf.overview.forEach(({ label }) => { if (!labelOrder.includes(label)) labelOrder.push(label); }));
+        const data = [];
+        data.push(['Importierte Angaben VOR der Berechnung nach der StBAPO!']);
+        data.push(['Kennzahl', ...sortedFilesA.map(pf => pf.name)]);
+        data.push(['Ordnungskriterium', ...sortedFilesA.map(pf => pf.groupLabel)]);
+        labelOrder.forEach(label => {
+            const row = [label];
+            sortedFilesA.forEach(pf => {
+                const entry = pf.overview.find(o => o.label === label);
+                row.push(entry ? formatStatValueForExport(entry.value) : '');
+            });
+            data.push(row);
+        });
+        data.push([]);
+        data.push(['Gesamt (alle eingelesenen Dateien)']);
+        overallStats.forEach(stat => data.push([stat.label, formatStatValueForExport(stat.value)]));
+        return data;
+    }
+
+    function buildFragenauswertungSheetData() {
+        const totalParticipants = getOverallParticipantTotal(overallStats);
+        const data = [];
+        data.push(['Anzahl der eingelesenen Dateien', sortedFilesA.length]);
+        data.push(['Anzahl eindeutiger Fragen', aggregatedQuestions.length]);
+        data.push(['Anzahl der Testteilnehmer', totalParticipants]);
+        data.push([]);
+        data.push(['Frage', 'Durchschnittlich erreichte Punktezahl', 'Max. erreichbare Punkte', 'Prozentsatz', 'Anzahl der Antworten (gesamt)', 'Hinweis']);
+        aggregatedQuestions.forEach(stat => {
+            data.push([
+                stat.title,
+                stat.combinedAvg !== null ? Number(stat.combinedAvg.toFixed(2)) : '',
+                stat.maxVal !== null ? stat.maxVal : '',
+                stat.combinedPercent !== null ? Number((stat.combinedPercent * 100).toFixed(1)) : '',
+                stat.totalCount || '',
+                stat.maxConsistent ? '' : ('Uneinheitliche Max-Punkte: ' + stat.maxArr.join(' / '))
+            ]);
+        });
+        return data;
+    }
+
+    function buildEinzelergebnisseSheetData() {
+        const header = ['Ordnungskriterium', ...PARTICIPANT_FIXED_COLUMNS, ...aggregatedQuestions.map(q => q.title)];
+        const data = [header];
+        sortedFilesA.forEach(pf => {
+            pf.participants.forEach(participant => {
+                const row = [pf.groupLabel];
+                PARTICIPANT_FIXED_COLUMNS.forEach(name => row.push(participant[name] !== undefined ? participant[name] : ''));
+                aggregatedQuestions.forEach(q => row.push(participant.questions[q.title] !== undefined ? participant.questions[q.title] : ''));
+                data.push(row);
+            });
+        });
+        return data;
+    }
+
+    // ======================================================================
+    // ===== Notenrechner § 18 StBAPO (vormals Tool B) =====
+    // ======================================================================
+    const gradeScaleOver = [
+        { threshold: 92, grade: 15 }, { threshold: 82, grade: 14 }, { threshold: 74, grade: 13 },
+        { threshold: 64, grade: 12 }, { threshold: 56, grade: 11 }, { threshold: 46, grade: 10 },
+        { threshold: 36, grade: 9 }, { threshold: 28, grade: 8 }, { threshold: 18, grade: 7 }, { threshold: 8, grade: 6 }
+    ];
+    const gradeLabels = {
+        0: 'ungenügend', 1: 'ungenügend', 2: 'mangelhaft', 3: 'mangelhaft', 4: 'mangelhaft',
+        5: 'ausreichend', 6: 'ausreichend', 7: 'ausreichend', 8: 'befriedigend', 9: 'befriedigend',
+        10: 'befriedigend', 11: 'gut', 12: 'gut', 13: 'gut', 14: 'sehr gut', 15: 'sehr gut'
+    };
+    const gradeScaleUnder = [
+        { threshold: 20, grade: 4 }, { threshold: 40, grade: 3 }, { threshold: 50, grade: 2 },
+        { threshold: 60, grade: 1 }, { threshold: 100, grade: 0 }
+    ];
+
+    function applyNumberFormat(worksheet, colIndexes, numFmt) {
+        if (!worksheet['!ref']) return;
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            for (const C of colIndexes) {
+                const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+                const cell = worksheet[cellRef];
+                if (cell && typeof cell.v === 'number') cell.z = numFmt;
+            }
+        }
+    }
+    function formatNumberGerman(num, decimals = 5) { return num.toFixed(decimals).replace('.', ','); }
+
+    function getGradeForOver(percent) {
+        percent = Math.round(percent * 100000) / 100000;
+        if (percent > 92) return 15; if (percent > 82) return 14; if (percent > 74) return 13;
+        if (percent > 64) return 12; if (percent > 56) return 11; if (percent > 46) return 10;
+        if (percent > 36) return 9; if (percent > 28) return 8; if (percent > 18) return 7;
+        if (percent > 8) return 6; return 5;
+    }
+    function getGradeForUnder(percent) {
+        percent = Math.round(percent * 100000) / 100000;
+        if (percent <= 20) return 4; if (percent <= 40) return 3; if (percent <= 50) return 2;
+        if (percent <= 60) return 1; return 0;
+    }
+
+    function showMaxPointsInput() {
+        document.getElementById('maxPointsInputSection').classList.remove('hidden');
+        processBtn.classList.add('hidden');
+        showError('Bitte geben Sie die maximal erreichbare Leistungspunktzahl ein, da diese nicht in den Daten gefunden wurde.');
+    }
+
+    function retryWithMaxPoints() {
+        const maxPointsInput = document.getElementById('maxPoints');
+        maxPoints = parseFloat(maxPointsInput.value);
+        if (isNaN(maxPoints) || maxPoints <= 0) { showError('Bitte geben Sie eine gültige maximale Leistungspunktzahl ein.'); return; }
+        maxPointsAutoDetected = true;
+        document.getElementById('maxPointsInputSection').classList.add('hidden');
+        processBtn.classList.remove('hidden');
+        hideError();
+        performCalculationsB();
+    }
+
+    function performCalculationsB() {
+        if (allStudentData.length === 0) { showError('Keine gültigen Studentendaten gefunden. Bitte überprüfen Sie das Format der Excel-Dateien.'); return; }
+        if (maxPoints <= 0) { showError('Bitte geben Sie eine gültige maximale Leistungspunktzahl ein.'); return; }
+
+        let totalPoints = 0, validStudents = 0;
+        const pointsColumnIndex = allHeaders.findIndex(header =>
+            header.toLowerCase().includes('testergebnis in punkten') ||
+            header.toLowerCase().includes('erreichte punkte') ||
+            header.toLowerCase().includes('punkte')
+        );
+        if (pointsColumnIndex === -1) { showError('Keine Spalte mit Testergebnissen gefunden. Bitte überprüfen Sie die Spaltenüberschriften.'); return; }
+
+        allStudentData.forEach(student => {
+            const points = parseFloat(student.originalRow[pointsColumnIndex]);
+            if (!isNaN(points)) {
+                totalPoints += points; validStudents++; student.points = points;
+                const diff = points - (maxPoints * 0.5);
+                if (diff >= 0) {
+                    const diffPercent = (diff / (maxPoints - (maxPoints * 0.5))) * 100;
+                    student.grade = getGradeForOver(diffPercent);
+                } else {
+                    const underPercent = (Math.abs(diff) / (maxPoints * 0.5)) * 100;
+                    student.grade = getGradeForUnder(underPercent);
+                }
+            }
+        });
+        if (validStudents === 0) { showError('Keine gültigen Testergebnisse gefunden.'); return; }
+
+        const avgPerformance = totalPoints / validStudents;
+        const sixtyPercentThreshold = 0.6 * maxPoints;
+        const relativeThreshold = 0.78 * avgPerformance;
+        const anchorThreshold = 0.5 * maxPoints;
+        let finalThreshold;
+        if (relativeThreshold < sixtyPercentThreshold) finalThreshold = Math.max(relativeThreshold, anchorThreshold);
+        else finalThreshold = sixtyPercentThreshold;
+
+        allStudentData.forEach(student => {
+            if (student.points !== undefined) {
+                const diff = student.points - finalThreshold;
+                if (diff >= 0) {
+                    const diffPercent = (diff / (maxPoints - finalThreshold)) * 100;
+                    student.grade = getGradeForOver(diffPercent);
+                } else {
+                    const underPercent = (Math.abs(diff) / finalThreshold) * 100;
+                    student.grade = getGradeForUnder(underPercent);
+                }
+            }
+        });
+
+        calculations = {
+            avgPerformance, sixtyPercentThreshold, relativeThreshold, anchorThreshold, finalThreshold,
+            pointsColumnIndex, diffMLPMax: maxPoints - finalThreshold, maxPoints
+        };
+
+        displayCalculationsB();
+        hideError();
+        exportSectionEl.classList.remove('hidden');
+    }
+
+    function displayCalculationsB() {
+        document.getElementById('fileCount').textContent = fileCount;
+        document.getElementById('studentCount').textContent = allStudentData.length;
+        document.getElementById('maxPointsDisplay').textContent = formatNumberGerman(calculations.maxPoints);
+        document.getElementById('avgPerformance').textContent = formatNumberGerman(calculations.avgPerformance);
+        document.getElementById('sixtyPercentThreshold').textContent = formatNumberGerman(calculations.sixtyPercentThreshold);
+        document.getElementById('relativeThreshold').textContent = formatNumberGerman(calculations.relativeThreshold);
+        document.getElementById('anchorThreshold').textContent = formatNumberGerman(calculations.anchorThreshold);
+        document.getElementById('finalThreshold').textContent = formatNumberGerman(calculations.finalThreshold);
+        document.getElementById('diffMLPMax').textContent = formatNumberGerman(calculations.diffMLPMax);
+        document.getElementById('calculationsSection').classList.remove('hidden');
+    }
+
+    // Baut die Notenberechnungs-Tabelle (Kopfzeile + Datenzeilen) aus allStudentData.
+    function buildGradesData(filterGroup = null) {
+        const gradesHeaders = [
+            'Ordnungskriterium', 'Matrikelnummer', 'Anmeldename', 'Testergebnis', 'MLP',
+            'Überschreitender Betrag', 'Überschreiten in % der Differenz',
+            'Unterschreitender Betrag', 'Unterschreiten in %', 'Notenpunktzahl'
+        ];
+        const gradesData = [gradesHeaders];
+        const matrikelnummerIndex = allHeaders.findIndex(header => header.toLowerCase().includes('matrikelnummer'));
+        const anmeldenameIndex = allHeaders.findIndex(header => header.toLowerCase().includes('anmeldename'));
+        const testResultIndex = calculations.pointsColumnIndex;
+
+        const students = filterGroup === null ? allStudentData : allStudentData.filter(s => s.studyGroup === filterGroup);
+
+        students.forEach(student => {
+            const points = student.points;
+            const diff = points - calculations.finalThreshold;
+            const matrikelnummer = matrikelnummerIndex !== -1 ? student.originalRow[matrikelnummerIndex] : '';
+            const anmeldename = anmeldenameIndex !== -1 ? student.originalRow[anmeldenameIndex] : '';
+            const testResult = testResultIndex !== -1 ? student.originalRow[testResultIndex] : points;
+
+            if (diff >= 0) {
+                const diffPoints = diff;
+                const diffPercent = (diffPoints / (maxPoints - calculations.finalThreshold)) * 100;
+                const grade = getGradeForOver(diffPercent);
+                student.grade = grade;
+                gradesData.push([student.studyGroup, matrikelnummer, anmeldename, testResult, calculations.finalThreshold, diffPoints, diffPercent, '', '', grade]);
+            } else {
+                const underPoints = Math.abs(diff);
+                const underPercent = (underPoints / calculations.finalThreshold) * 100;
+                const grade = getGradeForUnder(underPercent);
+                student.grade = grade;
+                gradesData.push([student.studyGroup, matrikelnummer, anmeldename, testResult, calculations.finalThreshold, '', '', underPoints, underPercent, grade]);
+            }
+        });
+        return gradesData;
+    }
+
+    function buildThresholdsSheetData() {
+        return [
+            ['Beschreibung', 'Wert'],
+            ['Anzahl der eingelesenen Dateien', fileCount],
+            ['Anzahl der Studenten', allStudentData.length],
+            ['Maximal erreichbare Punktzahl', calculations.maxPoints],
+            ['Durchschnittliche Leistung', calculations.avgPerformance],
+            ['60%-Grenze', calculations.sixtyPercentThreshold],
+            ['Relative Grenze (78% des Durchschnitts)', calculations.relativeThreshold],
+            ['Ankergrenze (50% der Maximalpunkte)', calculations.anchorThreshold],
+            ['Geltende Mindestleistungspunktzahl', calculations.finalThreshold],
+            ['Differenz (Maximalpunkte - MLP)', calculations.diffMLPMax]
+        ];
+    }
+
+    function buildGradeLevelsSheet() {
+        const gradeLevelsData = [];
+        const diffMaxMLP = calculations.diffMLPMax;
+        const mlp = calculations.finalThreshold;
+
+        const gradeLevelsHeaders1 = ['Notenstufe', 'von mehr als', 'bis einschließlich', 'Bezeichnung', '% von mehr als', '% bis einschließlich'];
+        gradeLevelsData.push(gradeLevelsHeaders1);
+        const overRanges = [
+            { grade: 15, fromPercent: 92, toPercent: 100 }, { grade: 14, fromPercent: 82, toPercent: 92 },
+            { grade: 13, fromPercent: 74, toPercent: 82 }, { grade: 12, fromPercent: 64, toPercent: 74 },
+            { grade: 11, fromPercent: 56, toPercent: 64 }, { grade: 10, fromPercent: 46, toPercent: 56 },
+            { grade: 9, fromPercent: 36, toPercent: 46 }, { grade: 8, fromPercent: 28, toPercent: 36 },
+            { grade: 7, fromPercent: 18, toPercent: 28 }, { grade: 6, fromPercent: 8, toPercent: 18 }
+        ];
+        overRanges.forEach(range => {
+            const from = mlp + (range.fromPercent / 100) * diffMaxMLP;
+            const to = mlp + (range.toPercent / 100) * diffMaxMLP;
+            const fromPercentValue = (from / maxPoints) * 100;
+            const toPercentValue = (to / maxPoints) * 100;
+            gradeLevelsData.push([range.grade, from, to, gradeLabels[range.grade], fromPercentValue, toPercentValue]);
+        });
+
+        gradeLevelsData.push([]);
+        gradeLevelsData.push(['Notenstufe', 'von einschließlich', 'bis einschließlich', 'Bezeichnung', '% von einschließlich', '% bis einschließlich']);
+        const from5 = mlp;
+        const to5 = mlp + (8 / 100) * diffMaxMLP;
+        gradeLevelsData.push([5, from5, to5, gradeLabels[5], (from5 / maxPoints) * 100, (to5 / maxPoints) * 100]);
+
+        gradeLevelsData.push([]);
+        gradeLevelsData.push(['Notenstufe', 'von einschließlich', 'bis weniger als', 'Bezeichnung', '% von einschließlich', '% bis weniger als']);
+        const underRanges = [
+            { grade: 4, fromPercent: 20, toPercent: 0 }, { grade: 3, fromPercent: 40, toPercent: 20 },
+            { grade: 2, fromPercent: 50, toPercent: 40 }, { grade: 1, fromPercent: 60, toPercent: 50 },
+            { grade: 0, fromPercent: 100, toPercent: 60 }
+        ];
+        underRanges.forEach(range => {
+            const lower = mlp - (range.fromPercent / 100) * mlp;
+            const upper = mlp - (range.toPercent / 100) * mlp;
+            gradeLevelsData.push([range.grade, lower, upper, gradeLabels[range.grade], (lower / maxPoints) * 100, (upper / maxPoints) * 100]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(gradeLevelsData);
+        applyNumberFormat(ws, [1, 2, 4, 5], '0.00000');
+        return ws;
+    }
+
+    function buildEvaluationSheet() {
+        const evaluationData = [['Notenstufe', 'Anzahl Studierende', 'Prozent']];
+        const gradeCounts = {};
+        allStudentData.forEach(student => { if (student.grade !== undefined) gradeCounts[student.grade] = (gradeCounts[student.grade] || 0) + 1; });
+        for (let grade = 15; grade >= 0; grade--) {
+            const count = gradeCounts[grade] || 0;
+            const percent = (count / allStudentData.length) * 100;
+            evaluationData.push([grade, count, percent]);
+        }
+        const ws = XLSX.utils.aoa_to_sheet(evaluationData);
+        applyNumberFormat(ws, [2], '0.00000');
+        return ws;
+    }
+
+    // Exportiert je Studiengruppe (Ordnungskriterium) eine eigene Datei mit dem Blatt
+    // "Notenberechnung" – unverändert gegenüber dem ursprünglichen Notenrechner-Tool.
+    function exportPerStudyGroup() {
+        if (allStudentData.length === 0) { showError('Es gibt keine Ergebnisse zum Exportieren.'); return; }
+        const groups = [...new Set(allStudentData.map(student => student.studyGroup))].sort((a, b) => a - b);
+        const prefixInput = document.getElementById('exportPrefix');
+        const rawPrefix = prefixInput && prefixInput.value.trim() ? prefixInput.value.trim() : 'StBAPO';
+        const prefix = sanitizeFilenamePart(rawPrefix);
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        groups.forEach((group, i) => {
+            setTimeout(() => {
+                const gradesData = buildGradesData(group);
+                const gradesWorksheet = XLSX.utils.aoa_to_sheet(gradesData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, gradesWorksheet, 'Notenberechnung');
+                XLSX.writeFile(workbook, `${prefix} StBAPO Notenberechnung Studiengruppe ${group} ${dateStr}.xlsx`);
+            }, i * 400);
+        });
+    }
+
+    // ======================================================================
+    // Gesamtexport: alle acht Tabellenblätter beider Auswertungen in einer Datei
+    // ======================================================================
+    function exportCombined() {
+        if (sortedFilesA.length === 0 && allStudentData.length === 0) { showError('Es gibt keine Ergebnisse zum Exportieren.'); return; }
+
+        const workbook = XLSX.utils.book_new();
+
+        // -- Aus dem Notenrechner § 18 StBAPO (wichtigere Blätter zuerst) --
+        if (allStudentData.length > 0 && calculations.finalThreshold !== undefined) {
+            const masterHeaders = ['Ordnungskriterium', ...allHeaders];
+            const masterData = [masterHeaders, ...allStudentData.map(s => [s.studyGroup, ...s.originalRow])];
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(masterData), 'Testergebnisse');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(buildThresholdsSheetData()), 'Bestehensgrenzen');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(buildGradesData()), 'Notenberechnung');
+            XLSX.utils.book_append_sheet(workbook, buildGradeLevelsSheet(), 'Notenstufen');
+            XLSX.utils.book_append_sheet(workbook, buildEvaluationSheet(), 'Auswertung');
+        }
+
+        // -- Aus der ILIAS-Fragenauswertung (nachrangig, daher am Ende) --
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(buildStatistikSheetData()), 'Statistik');
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(buildFragenauswertungSheetData()), 'Fragenauswertung');
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(buildEinzelergebnisseSheetData()), 'Einzelergebnisse');
+
+        const prefixInput = document.getElementById('exportPrefix');
+        const rawPrefix = prefixInput && prefixInput.value.trim() ? prefixInput.value.trim() : 'Auswertung';
+        const prefix = sanitizeFilenamePart(rawPrefix);
+        const dateStr = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(workbook, `${prefix} Gesamtauswertung ${dateStr}.xlsx`);
+    }
+
+    // ======================================================================
+    // Gemeinsame Verarbeitung: liest jede Datei einmal ein und speist beide
+    // Auswertungen (Fragenauswertung + Notenrechner)
+    // ======================================================================
+    async function processAllData() {
+        if (files.length === 0) return;
+        if (files.length > 50) { showError('Bitte laden Sie maximal 50 Dateien gleichzeitig hoch.'); return; }
+        hideError();
+
+        parsedFilesA = [];
+        allStudentData = [];
+        allHeaders = [];
+        fileCount = files.length;
+
+        const maxPointsInput = document.getElementById('maxPoints');
+        const manualMaxPoints = parseFloat(maxPointsInput.value);
+        if (!isNaN(manualMaxPoints) && manualMaxPoints > 0) { maxPoints = manualMaxPoints; maxPointsAutoDetected = true; }
+        else { maxPoints = 0; maxPointsAutoDetected = false; }
+
+        document.getElementById('exportPrefix').value = guessExportPrefix(files[0].name);
+
+        const warnings = [];
+
+        for (const file of files) {
+            const groupInfo = getGroupInfo(file.name);
+            try {
+                const workbook = await readWorkbook(file);
+
+                // ---- Aggregierte Testergebnisse (Fragenauswertung) ----
+                const aggSheetName = findAggregatedSheetName(workbook);
+                let parsedA = { overview: [], questions: [] };
+                if (aggSheetName) {
+                    const aggData = XLSX.utils.sheet_to_json(workbook.Sheets[aggSheetName], { header: 1 });
+                    parsedA = parseAggregatedSheet(aggData);
+                } else {
+                    warnings.push(`${file.name}: enthält kein Blatt 'Aggregierte Testergebnisse' (keine Statistik/Fragenauswertung für diese Datei möglich).`);
+                }
+
+                // ---- Testergebnisse (gemeinsam für Einzelergebnisse + Notenrechner) ----
+                const testSheetName = findTestergebnisseSheetName(workbook);
+                let testData = null;
+                if (testSheetName) {
+                    testData = XLSX.utils.sheet_to_json(workbook.Sheets[testSheetName], { header: 1 });
+                } else {
+                    warnings.push(`${file.name}: enthält kein Blatt 'Testergebnisse'.`);
+                }
+
+                parsedA.participants = testData ? parseTestergebnisseSheet(testData) : [];
+                parsedA.name = file.name;
+                parsedA.groupSortKey = groupInfo.sortKey;
+                parsedA.groupLabel = groupInfo.label;
+                parsedFilesA.push(parsedA);
+
+                if (testData && testData.length > 1) {
+                    if (allHeaders.length === 0) allHeaders = testData[0].map(h => h ? h.toString().trim() : '');
+
+                    if (!maxPointsAutoDetected) {
+                        const maxPointsHeaderIdx = allHeaders.findIndex(h =>
+                            h.toLowerCase().includes('maximal erreichbare punkte') ||
+                            h.toLowerCase().includes('max punkte') ||
+                            h.toLowerCase().includes('maximalpunkte')
+                        );
+                        if (maxPointsHeaderIdx !== -1) {
+                            for (let k = 1; k < testData.length; k++) {
+                                const v = parseFloat(testData[k][maxPointsHeaderIdx]);
+                                if (!isNaN(v) && v > 0) { maxPoints = v; maxPointsAutoDetected = true; document.getElementById('maxPoints').value = maxPoints; break; }
+                            }
+                        }
+                    }
+
+                    for (let j = 1; j < testData.length; j++) {
+                        const row = testData[j];
+                        if (row.length > 0) allStudentData.push({ studyGroup: groupInfo.number, originalRow: row });
+                    }
+                }
+            } catch (err) {
+                warnings.push(`${file.name}: ${err.message}`);
+            }
+        }
+
+        if (warnings.length > 0) alert('Bei folgenden Dateien gab es Hinweise:\n' + warnings.join('\n'));
+
+        // ---- Fragenauswertung anzeigen (unabhängig vom Notenrechner-Status) ----
+        sortedFilesA = [...parsedFilesA].sort((a, b) => a.groupSortKey - b.groupSortKey);
+        aggregatedQuestions = aggregateQuestions(sortedFilesA);
+        overallStats = computeOverallStats(sortedFilesA);
+        renderStatistik(overallStats);
+        renderFragenauswertung(aggregatedQuestions, sortedFilesA, overallStats);
+        resultsDiv.classList.remove('hidden');
+        document.getElementById('defaultOpen').click();
+
+        // ---- Notenrechner: Punktzahl anfordern oder direkt berechnen ----
+        if (!maxPointsAutoDetected) showMaxPointsInput();
+        else performCalculationsB();
+    }
+
+    function resetAll() {
+        files = [];
+        parsedFilesA = []; sortedFilesA = []; aggregatedQuestions = []; overallStats = [];
+        allStudentData = []; maxPoints = 0; calculations = {}; fileCount = 0; allHeaders = []; maxPointsAutoDetected = false;
+
+        fileInputEl.value = '';
+        fileListEl.innerHTML = ''; fileListEl.classList.add('hidden');
+        document.getElementById('maxPoints').value = '';
+        document.getElementById('exportPrefix').value = '';
+        document.getElementById('maxPointsInputSection').classList.add('hidden');
+        processBtn.classList.remove('hidden');
+        processBtn.disabled = true;
+        resultsDiv.classList.add('hidden');
+        exportSectionEl.classList.add('hidden');
+        document.getElementById('calculationsSection').classList.add('hidden');
+        hideError();
+    }
+</script>
+</body>
+</html>
